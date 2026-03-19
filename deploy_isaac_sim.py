@@ -39,7 +39,7 @@ FW_SIGNAL_RULE  = "allow-isaac-signal"
 FW_STREAM_RULE  = "allow-isaac-stream"
 NETWORK_TAG     = "isaac-sim"
 
-ISAAC_IMAGE     = "nvcr.io/nvidia/isaac-sim:latest"
+ISAAC_IMAGE     = "nvcr.io/nvidia/isaac-sim:4.5.0"
 
 SETUP_SCRIPT    = Path(__file__).parent / "vm_setup.sh"
 
@@ -85,7 +85,7 @@ def create_vm(project: str, zone: str, name: str, maintenance_policy: str):
         f"--zone={zone}",
         f"--machine-type={INSTANCE_TYPE}",
         f"--accelerator=type={GPU_TYPE},count={GPU_COUNT}",
-        f"--on-host-maintenance={maintenance_policy}",
+        f"--maintenance-policy={maintenance_policy}",
         f"--boot-disk-size={DISK_SIZE_GB}GB",
         "--boot-disk-type=pd-ssd",
         f"--image-family={IMAGE_FAMILY}",

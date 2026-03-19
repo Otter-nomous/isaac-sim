@@ -10,7 +10,7 @@ set -euo pipefail
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
-ISAAC_IMAGE="nvcr.io/nvidia/isaac-sim:latest"
+ISAAC_IMAGE="nvcr.io/nvidia/isaac-sim:4.5.0"
 SIGNAL_PORT=49100
 STREAM_PORT=47998
 CONTAINER_NAME="isaac-sim"
@@ -107,7 +107,7 @@ install_nvidia_container_toolkit() {
 
     log "Installing NVIDIA Container Toolkit ..."
     curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey \
-        | sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+        | sudo gpg --batch --yes --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
 
     curl -sL https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list \
         | sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' \
