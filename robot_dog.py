@@ -32,7 +32,7 @@ from omni.isaac.core.utils.stage import add_reference_to_stage
 from omni.isaac.core.utils.nucleus import get_assets_root_path
 import omni.kit.commands
 import carb
-from pxr import UsdLux, Gf
+from pxr import UsdLux, UsdGeom, Gf
 
 # ── World + ground plane ───────────────────────────────────────────────────────
 world = World(stage_units_in_meters=1.0)
@@ -47,7 +47,7 @@ dome.CreateIntensityAttr(800.0)
 distant = UsdLux.DistantLight.Define(stage, "/World/DistantLight")
 distant.CreateIntensityAttr(2000.0)
 distant.CreateAngleAttr(0.53)
-distant.AddXformOp(distant.UsdGeomXformOp.TypeRotateXYZ).Set(Gf.Vec3f(-45.0, 0.0, 30.0))
+UsdGeom.Xformable(distant).AddXformOp(UsdGeom.XformOp.TypeRotateXYZ).Set(Gf.Vec3f(-45.0, 0.0, 30.0))
 
 # ── Robot dog asset ────────────────────────────────────────────────────────────
 # Try Unitree Go2 first, fall back to ANYmal C (both are quadruped / "robot dog")

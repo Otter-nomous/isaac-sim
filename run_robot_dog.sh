@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# run_robot_dog.sh – Deploy robot_dog.py to the GCP VM and launch it in Isaac Sim.
+# run_robot_dog.sh – Deploy robot_dog_setup.py to the GCP VM and launch it
+#                   inside the full Isaac Sim GUI via --exec.
 #
 # Usage (from your Mac):
 #   bash run_robot_dog.sh
@@ -30,14 +31,15 @@ if [[ "$STATUS" != "RUNNING" ]]; then
     exit 1
 fi
 
-# ── 2. Copy robot_dog.py to the VM ───────────────────────────────────────────
-log "Copying robot_dog.py to VM ..."
-gcloud compute scp "$(dirname "$0")/robot_dog.py" "$NAME:~/robot_dog.py" \
+# ── 2. Copy setup script to the VM ───────────────────────────────────────────
+log "Copying robot_dog_setup.py to VM ..."
+gcloud compute scp "$(dirname "$0")/robot_dog_setup.py" \
+    "$NAME:~/robot_dog_setup.py" \
     --project="$PROJECT" --zone="$ZONE"
 ok "Script uploaded"
 
-# ── 3. Re-launch Isaac Sim container running the robot dog scene ──────────────
-log "Starting Isaac Sim with robot dog scene ..."
+# ── 3. Re-launch Isaac Sim GUI with the setup script ─────────────────────────
+log "Starting Isaac Sim (full GUI) with robot dog scene ..."
 
 CACHE_BASE="\${HOME}/docker/isaac-sim/cache"
 
@@ -52,14 +54,14 @@ gcloud compute ssh "$NAME" \
             --privileged \\
             --gpus all \\
             --network=host \\
-            --entrypoint /isaac-sim/python.sh \\
+            --entrypoint /isaac-sim/isaac-sim.sh \\
             -e ACCEPT_EULA=Y \\
             -e PRIVACY_CONSENT=Y \\
             -e DISPLAY=$DISPLAY_NUM \\
             -e OMNI_KIT_ALLOW_ROOT=1 \\
             -v /tmp/.X11-unix:/tmp/.X11-unix \\
             -v /var/run/utmp:/var/run/utmp:ro \\
-            -v \\\${HOME}/robot_dog.py:/robot_dog.py:ro \\
+            -v \\\${HOME}/robot_dog_setup.py:/robot_dog_setup.py:ro \\
             -v ${CACHE_BASE}/kit:/isaac-sim/kit/cache:rw \\
             -v ${CACHE_BASE}/ov:/root/.cache/ov:rw \\
             -v ${CACHE_BASE}/pip:/root/.cache/pip:rw \\
@@ -69,7 +71,8 @@ gcloud compute ssh "$NAME" \
             -v \\\${HOME}/docker/isaac-sim/data:/root/.local/share/ov/data:rw \\
             -v \\\${HOME}/docker/isaac-sim/documents:/root/Documents:rw \\
             $IMAGE \\
-            /robot_dog.py\"
+            --exec /robot_dog_setup.py \\
+            --allow-root\"
     "
 
 ok "Container started"
@@ -80,7 +83,7 @@ EXTERNAL_IP=$(gcloud compute instances describe "$NAME" \
     --format="get(networkInterfaces[0].accessConfigs[0].natIP)")
 
 echo ""
-echo "  Robot dog scene loading (first run: ~3-5 min for asset download) ..."
+echo "  Isaac Sim loading (~3 min) then robot dog setup runs automatically."
 echo ""
 echo "  Tail logs:"
 echo "    gcloud compute ssh $NAME --zone $ZONE --command 'docker logs -f $CONTAINER'"
