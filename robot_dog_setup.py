@@ -17,12 +17,13 @@ ASSETS_S3 = "https://omniverse-content-production.s3-us-west-2.amazonaws.com/Ass
 # Trot gait: FL+RR swing together, FR+RL swing together (phase offset = π)
 FREQ_HZ   = 1.5          # stride frequency
 HIP_AMP   = 0.05         # hip abduction amplitude (rad)
-THIGH_AMP = 0.55         # thigh flexion amplitude (rad)
-CALF_AMP  = 0.80         # calf flexion amplitude (rad)
+THIGH_AMP = 0.30         # thigh flexion amplitude (rad)
+CALF_AMP  = 0.50         # calf flexion amplitude (rad)
 
-# Standing-pose offsets (rad) – robot rests here between strides
-THIGH_OFFSET = -0.6
-CALF_OFFSET  =  1.4
+# Go2 standing-pose offsets (rad) – from Isaac Lab Go2 default joint pos
+# Positive thigh = flex forward; negative calf = fold knee back
+THIGH_OFFSET =  0.8
+CALF_OFFSET  = -1.5
 
 TROT_PHASE = {          # per-leg phase offset (rad)
     "FL": 0.0,
@@ -168,7 +169,7 @@ async def load_robot_dog():
             elif "thigh" in name_l:
                 target_rad = THIGH_OFFSET + THIGH_AMP * math.sin(omega * t + phase)
             elif "calf" in name_l:
-                target_rad = CALF_OFFSET - CALF_AMP * math.sin(omega * t + phase)
+                target_rad = CALF_OFFSET + CALF_AMP * math.sin(omega * t + phase)
             else:
                 target_rad = 0.0
 
