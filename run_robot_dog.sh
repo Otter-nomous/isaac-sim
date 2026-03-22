@@ -15,7 +15,7 @@ ZONE="us-central1-a"
 NAME="isaac-sim-vm"
 CONTAINER="isaac-sim"
 IMAGE="nvcr.io/nvidia/isaac-sim:4.5.0"
-DISPLAY_NUM=":99"
+DISPLAY_NUM=":0"   # must match the Xvfb display that x11vnc captures
 
 log() { echo -e "\n\033[1;34m[ROBOT]\033[0m $*"; }
 ok()  { echo -e "\033[1;32m  ✓ $*\033[0m"; }
