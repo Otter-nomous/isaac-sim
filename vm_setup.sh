@@ -5,15 +5,18 @@
 # Invoked by deploy_isaac_sim.py with VM_EXTERNAL_IP set in the environment.
 # Can also be run manually:
 #   VM_EXTERNAL_IP=<your-vm-ip> bash vm_setup.sh
+#
+# Viewing the sim:
+#   Open http://<VM_EXTERNAL_IP>:6080/vnc.html in your browser (no client needed).
 
 set -euo pipefail
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
 ISAAC_IMAGE="nvcr.io/nvidia/isaac-sim:4.5.0"
-SIGNAL_PORT=49100
-STREAM_PORT=47998
 CONTAINER_NAME="isaac-sim"
+DISPLAY_NUM=":99"
+NOVNC_PORT=6080
 
 # Persistent volume directories (host paths)
 CACHE_BASE="${HOME}/docker/isaac-sim/cache"
@@ -122,7 +125,58 @@ install_nvidia_container_toolkit() {
     ok "NVIDIA Container Toolkit installed and Docker runtime configured"
 }
 
-# ─── 5. Persist NGC credentials (optional) ────────────────────────────────────
+# ─── 5. NvFBC (GPU framebuffer capture library) ───────────────────────────────
+
+install_nvfbc() {
+    if ldconfig -p | grep -q libnvidia-fbc; then
+        ok "NvFBC already installed"
+        return
+    fi
+
+    log "Installing NvFBC (framebuffer capture) ..."
+    # Match the installed driver series (580-server on GCP L4)
+    DRIVER_VER=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader | head -1 | cut -d. -f1)
+    PKG="libnvidia-fbc1-${DRIVER_VER}-server"
+    if ! apt-cache show "$PKG" &>/dev/null; then
+        PKG="libnvidia-fbc1-${DRIVER_VER}"
+    fi
+    sudo apt-get install -y "$PKG"
+    sudo ldconfig
+    ok "NvFBC installed: $PKG"
+}
+
+# ─── 6. Virtual display + VNC viewer ──────────────────────────────────────────
+
+install_display_stack() {
+    log "Installing Xvfb, x11vnc, noVNC ..."
+    sudo apt-get install -y xvfb x11vnc novnc
+    ok "Display stack installed"
+}
+
+start_virtual_display() {
+    log "Starting virtual display on ${DISPLAY_NUM} ..."
+    pkill Xvfb 2>/dev/null || true
+    Xvfb "${DISPLAY_NUM}" -screen 0 1920x1080x24 &>/tmp/xvfb.log &
+    sleep 2
+    DISPLAY="${DISPLAY_NUM}" xhost +local:root 2>/dev/null || true
+    ok "Xvfb running on display ${DISPLAY_NUM}"
+}
+
+start_novnc() {
+    log "Starting noVNC on port ${NOVNC_PORT} ..."
+    pkill x11vnc 2>/dev/null || true
+    pkill websockify 2>/dev/null || true
+    sleep 1
+
+    DISPLAY="${DISPLAY_NUM}" x11vnc -display "${DISPLAY_NUM}" -nopw \
+        -listen localhost -xkb -forever -bg -o /tmp/x11vnc.log
+    /usr/share/novnc/utils/launch.sh \
+        --vnc localhost:5900 --listen "${NOVNC_PORT}" &>/tmp/novnc.log &
+    sleep 2
+    ok "noVNC started – view at http://${VM_EXTERNAL_IP}:${NOVNC_PORT}/vnc.html"
+}
+
+# ─── 7. Persist NGC credentials (optional) ────────────────────────────────────
 
 ngc_login() {
     if [[ -n "${NGC_API_KEY:-}" ]]; then
@@ -137,7 +191,7 @@ ngc_login() {
     fi
 }
 
-# ─── 6. Create volume directories ─────────────────────────────────────────────
+# ─── 8. Create volume directories ─────────────────────────────────────────────
 
 create_volumes() {
     log "Creating persistent volume directories ..."
@@ -153,7 +207,7 @@ create_volumes() {
     ok "Volume directories ready under ${HOME}/docker/isaac-sim/"
 }
 
-# ─── 7. Pull Isaac Sim image ──────────────────────────────────────────────────
+# ─── 9. Pull Isaac Sim image ──────────────────────────────────────────────────
 
 pull_image() {
     log "Pulling Isaac Sim image (this takes 10-20 min on first run) ..."
@@ -162,21 +216,33 @@ pull_image() {
     ok "Image pulled: ${ISAAC_IMAGE}"
 }
 
-# ─── 8. Launch Isaac Sim ──────────────────────────────────────────────────────
+# ─── 10. Launch Isaac Sim ─────────────────────────────────────────────────────
+#
+# Runs Isaac Sim in full GUI mode on the virtual display (Xvfb).
+# View the UI in your browser via noVNC – no client install needed.
+#
+# Note: Isaac Sim 4.5's built-in WebRTC streaming (runheadless.webrtc.sh) uses
+# libNvStreamServer which does not initialise on GCP L4 instances (error
+# 0x800E8401). The GUI-on-Xvfb + noVNC approach is the reliable alternative.
 
 launch_isaac_sim() {
-    log "Launching Isaac Sim with WebRTC streaming ..."
+    log "Launching Isaac Sim (GUI mode on virtual display) ..."
 
-    # Stop any existing container with the same name
     sg docker -c "docker rm -f ${CONTAINER_NAME} 2>/dev/null || true"
 
     sg docker -c "docker run -d \
         --name ${CONTAINER_NAME} \
         --restart unless-stopped \
+        --privileged \
         --gpus all \
         --network=host \
+        --entrypoint /isaac-sim/isaac-sim.sh \
         -e ACCEPT_EULA=Y \
         -e PRIVACY_CONSENT=Y \
+        -e DISPLAY=${DISPLAY_NUM} \
+        -e OMNI_KIT_ALLOW_ROOT=1 \
+        -v /tmp/.X11-unix:/tmp/.X11-unix \
+        -v /var/run/utmp:/var/run/utmp:ro \
         -v ${CACHE_BASE}/kit:/isaac-sim/kit/cache:rw \
         -v ${CACHE_BASE}/ov:/root/.cache/ov:rw \
         -v ${CACHE_BASE}/pip:/root/.cache/pip:rw \
@@ -186,25 +252,18 @@ launch_isaac_sim() {
         -v ${DATA_DIR}:/root/.local/share/ov/data:rw \
         -v ${DOCS_DIR}:/root/Documents:rw \
         ${ISAAC_IMAGE} \
-        ./runheadless.webrtc.sh \
-        --/exts/omni.kit.livestream.app/primaryStream/publicIp=${VM_EXTERNAL_IP} \
-        --/exts/omni.kit.livestream.webrtc/signalingServerPort=${SIGNAL_PORT} \
-        --/exts/omni.kit.livestream.webrtc/mediaServerPort=${STREAM_PORT}"
+        --allow-root"
 
     ok "Container '${CONTAINER_NAME}' started"
-    echo ""
-    echo "  Streaming endpoint  : ${VM_EXTERNAL_IP}:${SIGNAL_PORT}  (TCP)"
-    echo "  Media ports         : ${STREAM_PORT}-48012  (UDP)"
     echo ""
     echo "  Tail logs with:"
     echo "    docker logs -f ${CONTAINER_NAME}"
 }
 
-# ─── 9. Verify GPU access inside container ────────────────────────────────────
+# ─── 11. Verify GPU access inside container ───────────────────────────────────
 
 verify_gpu() {
     log "Verifying GPU access in container ..."
-    # Give the container a few seconds to initialise
     sleep 5
     sg docker -c "docker exec ${CONTAINER_NAME} nvidia-smi" 2>/dev/null \
         && ok "GPU visible inside container" \
@@ -226,17 +285,21 @@ main() {
     install_nvidia_driver
     install_docker
     install_nvidia_container_toolkit
+    install_nvfbc
+    install_display_stack
+    start_virtual_display
     ngc_login
     create_volumes
     pull_image
     launch_isaac_sim
     verify_gpu
+    start_novnc
 
     echo ""
     echo "============================================================"
     echo "  Setup complete!"
-    echo "  Connect from your Mac using the Omniverse Streaming Client"
-    echo "  Server : ${VM_EXTERNAL_IP}   Port : ${SIGNAL_PORT}"
+    echo "  View Isaac Sim in your browser (no client needed):"
+    echo "  http://${VM_EXTERNAL_IP}:${NOVNC_PORT}/vnc.html"
     echo "============================================================"
 }
 

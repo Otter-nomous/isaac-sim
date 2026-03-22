@@ -33,7 +33,7 @@ EXTERNAL_IP=$(gcloud compute instances describe "$NAME" \
 
 echo ""
 echo "  VM External IP : $EXTERNAL_IP"
-echo "  Connect via Omniverse Streaming Client → $EXTERNAL_IP:49100"
+echo "  View Isaac Sim  : http://$EXTERNAL_IP:6080/vnc.html"
 echo ""
 echo "  Tail Isaac Sim logs:"
 echo "    gcloud compute ssh $NAME --zone $ZONE --command 'docker logs -f isaac-sim'"
