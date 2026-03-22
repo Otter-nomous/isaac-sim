@@ -95,7 +95,7 @@ async def load_robot_dog():
             prim = stage.GetPrimAtPath(prim_path)
             xf = UsdGeom.Xformable(prim)
             xf.ClearXformOpOrder()
-            xf.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 0.50))
+            xf.AddTranslateOp().Set(Gf.Vec3d(0.0, 0.0, 0.32))
             robot_prim_path = prim_path
             carb.log_warn(f"[robot_dog] Loaded: {usd_url}")
             break
@@ -118,11 +118,15 @@ async def load_robot_dog():
         if not UsdPhysics.RevoluteJoint(prim):
             continue
         name = prim.GetName()          # e.g. "FL_hip_joint"
-        drive = UsdPhysics.DriveAPI.Apply(prim, "angular")
-        # High stiffness for position control; damping prevents oscillation
-        drive.CreateStiffnessAttr(200.0)
-        drive.CreateDampingAttr(20.0)
-        drive.CreateMaxForceAttr(100.0)
+        # Preserve existing drive if already configured in the USD
+        if prim.HasAPI(UsdPhysics.DriveAPI, "angular"):
+            drive = UsdPhysics.DriveAPI.Get(prim, "angular")
+        else:
+            drive = UsdPhysics.DriveAPI.Apply(prim, "angular")
+        # Stiff position control – must overcome body weight (~15 kg Go2)
+        drive.CreateStiffnessAttr(2000.0)
+        drive.CreateDampingAttr(100.0)
+        drive.CreateMaxForceAttr(1000.0)
         joint_drives[name] = drive
 
     carb.log_warn(f"[robot_dog] Configured {len(joint_drives)} joint drives")
@@ -145,7 +149,7 @@ async def load_robot_dog():
     carb.log_warn("[robot_dog] Physics started – robot standing up ...")
 
     # Give the robot a moment to reach the standing pose before walking
-    for _ in range(120):
+    for _ in range(240):
         await app.next_update_async()
 
     carb.log_warn("[robot_dog] Starting trot gait ...")
