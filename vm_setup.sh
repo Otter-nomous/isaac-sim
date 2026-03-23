@@ -10,6 +10,8 @@ set -euo pipefail
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
+# Base image. If you have a custom Dockerfile, build and push it to a registry,
+# then set this to your custom image tag (e.g. gcr.io/YOUR_PROJECT/isaac-sim:custom).
 ISAAC_IMAGE="nvcr.io/nvidia/isaac-sim:4.5.0"
 SIGNAL_PORT=49100
 STREAM_PORT=47998
