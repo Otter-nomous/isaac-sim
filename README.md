@@ -106,33 +106,23 @@ gcloud compute ssh isaac-sim-vm --zone us-central1-a \
 
 Ad-hoc changes made with `docker exec` or by SSHing into the VM are lost whenever the container is recreated (e.g. after a VM restart, image update, or migration). A Dockerfile makes the setup reproducible and portable.
 
-### Example Dockerfile
+### Dockerfile
 
-```dockerfile
-FROM nvcr.io/nvidia/isaac-sim:4.5.0
+A `Dockerfile` is included in this repo as a starting point. It extends the base Isaac Sim image and sets the required environment variables. Add your dependencies there as you introduce them:
 
-# Install custom Python dependencies into Isaac Sim's bundled Python
-RUN /isaac-sim/python.sh -m pip install \
-    pyzmq \
-    numpy \
-    opencv-python-headless
-
-# Copy custom scripts or extensions into the container
-COPY robot_dog_setup.py /robot_dog_setup.py
-COPY my_extension/ /isaac-sim/exts/my_extension/
-
-# Optional: set default environment variables
-ENV ACCEPT_EULA=Y \
-    PRIVACY_CONSENT=Y
+```bash
+# Uncomment and extend the RUN block in Dockerfile, then:
+docker build -t gcr.io/YOUR_PROJECT/isaac-sim:custom .
+docker push gcr.io/YOUR_PROJECT/isaac-sim:custom
 ```
 
-Build and push to a registry your VM can pull from, then update the image name in `vm_setup.sh` and `deploy_isaac_sim.py`.
+Then update `ISAAC_IMAGE` in `vm_setup.sh` to point to your custom tag.
 
 ### Why this matters for migration
 
 The GCP VM is not the only place Isaac Sim can run. Any Linux machine with an NVIDIA GPU can run the same container with zero changes. To migrate from GCP to a local workstation:
 
-1. Copy the `Dockerfile` (and any scripts it references) to the workstation
+1. Copy the `Dockerfile` (and any custom scripts it references) to the workstation
 2. `docker build -t my-isaac-sim .`
 3. Run with the same `docker run` flags (see `--print-docker-cmd` above), minus the WebRTC IP arguments if running locally
 
